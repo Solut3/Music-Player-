@@ -113,7 +113,7 @@ def read_track(path: Path) -> Track:
     )
 
 
-def collect_audio_paths(folders: list[Path]) -> list[Path]:
+def collect_audio_paths(folders: list[Path], recursive: bool = True) -> list[Path]:
     """Coleta caminhos de áudio sem ler metadados (rápido, baixo uso de RAM)."""
     paths: list[Path] = []
     seen: set[Path] = set()
@@ -122,7 +122,8 @@ def collect_audio_paths(folders: list[Path]) -> list[Path]:
         if not folder.is_dir():
             continue
         try:
-            for path in folder.rglob("*"):
+            entries = folder.rglob("*") if recursive else folder.iterdir()
+            for path in entries:
                 if not path.is_file():
                     continue
                 if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
@@ -145,13 +146,14 @@ def build_library(
     folders: list[Path],
     cache: dict[str, dict] | None = None,
     progress_callback=None,
+    recursive: bool = True,
 ) -> tuple[list[Track], dict[str, dict]]:
     """
     Monta biblioteca usando cache por mtime.
     Só relê metadados de arquivos novos ou modificados.
     """
     cache = dict(cache or {})
-    paths = collect_audio_paths(folders)
+    paths = collect_audio_paths(folders, recursive=recursive)
     tracks: list[Track] = []
     new_cache: dict[str, dict] = {}
     total = len(paths)
@@ -187,8 +189,8 @@ def build_library(
 
 
 def scan_folder(folder: Path, cache: dict[str, dict] | None = None) -> tuple[list[Track], dict[str, dict]]:
-    """Varre uma pasta e retorna faixas + cache atualizado."""
-    return build_library([folder], cache)
+    """Varre apenas os arquivos de áudio da pasta escolhida."""
+    return build_library([folder], cache, recursive=False)
 
 
 def scan_system_folders(cache: dict[str, dict] | None = None, progress_callback=None) -> tuple[list[Track], dict[str, dict]]:

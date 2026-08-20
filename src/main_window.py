@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
         self._player.set_volume(self._config.volume)
         self._seeking = False
         self._scanner: LibraryScanner | None = None
+        self._scan_generation = 0
         self._theme = self._config.theme if self._config.theme in THEMES else "dark"
 
         self.setWindowTitle("Music Player")
@@ -341,7 +342,7 @@ class MainWindow(QMainWindow):
             self._load_folder(Path(folder))
 
     def _load_folder(self, folder: Path, save: bool = True) -> None:
-        self._status.showMessage(f"Escaneando {folder.name}…")
+        self._status.showMessage(f"Lendo músicas de {folder.name}…")
         self._scan_progress.setVisible(True)
         self._scan_progress.setRange(0, 0)
 
@@ -349,10 +350,18 @@ class MainWindow(QMainWindow):
             self._scanner.requestInterruption()
             self._scanner.wait(2000)
 
-        self._scanner = LibraryScanner(folders=[folder], cache=self._config.library_cache)
+        self._scan_generation += 1
+        generation = self._scan_generation
+        self._scanner = LibraryScanner(
+            folders=[folder],
+            cache=self._config.library_cache,
+            recursive=False,
+        )
         self._scanner.progress.connect(self._on_scan_progress)
         self._scanner.finished_scan.connect(
-            lambda tracks, cache: self._on_scan_done(tracks, cache, folder if save else None)
+            lambda tracks, cache, current=generation: self._on_scan_done(
+                tracks, cache, folder if save else None, current
+            )
         )
         self._scanner.error.connect(self._on_scan_error)
         self._scanner.start()
@@ -371,10 +380,14 @@ class MainWindow(QMainWindow):
             self._scanner.requestInterruption()
             self._scanner.wait(2000)
 
+        self._scan_generation += 1
+        generation = self._scan_generation
         self._scanner = LibraryScanner(cache=self._config.library_cache, auto=True)
         self._scanner.progress.connect(self._on_scan_progress)
         self._scanner.finished_scan.connect(
-            lambda tracks, cache: self._on_scan_done(tracks, cache, None)
+            lambda tracks, cache, current=generation: self._on_scan_done(
+                tracks, cache, None, current
+            )
         )
         self._scanner.error.connect(self._on_scan_error)
         self._scanner.start()
@@ -383,7 +396,11 @@ class MainWindow(QMainWindow):
         self._scan_progress.setRange(0, total)
         self._scan_progress.setValue(current)
 
-    def _on_scan_done(self, tracks: list, cache: dict, folder: Path | None) -> None:
+    def _on_scan_done(
+        self, tracks: list, cache: dict, folder: Path | None, generation: int
+    ) -> None:
+        if generation != self._scan_generation:
+            return
         self._scan_progress.setVisible(False)
 
         if not tracks:
@@ -397,8 +414,12 @@ class MainWindow(QMainWindow):
 
         self._model.set_tracks(tracks)
         self._player.set_tracks(tracks)
-        self._track_count_label.setText(f"{len(tracks)} faixas")
-        self._status.showMessage(f"{len(tracks)} música(s) encontrada(s) no PC.")
+        if folder:
+            self._track_count_label.setText(f"{len(tracks)} faixas · {folder.name}")
+            self._status.showMessage(f"{len(tracks)} música(s) em {folder.name}.")
+        else:
+            self._track_count_label.setText(f"{len(tracks)} faixas")
+            self._status.showMessage(f"{len(tracks)} música(s) encontrada(s) no PC.")
 
         if self._tray:
             self._tray.setToolTip(f"Music Player — {len(tracks)} faixas")

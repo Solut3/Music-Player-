@@ -24,26 +24,37 @@ class LibraryScanner(QThread):
         folders: list[Path] | None = None,
         cache: dict | None = None,
         auto: bool = False,
+        recursive: bool = True,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._folders = folders
         self._cache = cache or {}
         self._auto = auto
+        self._recursive = recursive
 
     def run(self) -> None:
         try:
+            if self.isInterruptionRequested():
+                return
+
             def on_progress(current: int, total: int) -> None:
                 self.progress.emit(current, total)
 
             if self._auto:
                 tracks, new_cache = scan_system_folders(self._cache, on_progress)
             elif self._folders:
-                tracks, new_cache = build_library(self._folders, self._cache, on_progress)
+                tracks, new_cache = build_library(
+                    self._folders,
+                    self._cache,
+                    on_progress,
+                    recursive=self._recursive,
+                )
             else:
                 tracks, new_cache = [], {}
 
-            self.finished_scan.emit(tracks, new_cache)
+            if not self.isInterruptionRequested():
+                self.finished_scan.emit(tracks, new_cache)
         except Exception as exc:
             self.error.emit(str(exc))
 
