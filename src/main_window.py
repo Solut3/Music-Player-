@@ -342,7 +342,12 @@ class MainWindow(QMainWindow):
             self._load_folder(Path(folder))
 
     def _load_folder(self, folder: Path, save: bool = True) -> None:
-        self._status.showMessage(f"Lendo músicas de {folder.name}…")
+        # Invalida qualquer varredura anterior antes de limpar a interface. Dessa
+        # forma, o resultado do escaneamento geral não pode reaparecer na lista.
+        self._scan_generation += 1
+        generation = self._scan_generation
+        self._clear_library_view(f"Lendo músicas de {folder.name}…")
+
         self._scan_progress.setVisible(True)
         self._scan_progress.setRange(0, 0)
 
@@ -350,8 +355,6 @@ class MainWindow(QMainWindow):
             self._scanner.requestInterruption()
             self._scanner.wait(2000)
 
-        self._scan_generation += 1
-        generation = self._scan_generation
         self._scanner = LibraryScanner(
             folders=[folder],
             cache=self._config.library_cache,
@@ -367,6 +370,8 @@ class MainWindow(QMainWindow):
         self._scanner.start()
 
     def _scan_system(self, silent: bool = False) -> None:
+        self._scan_generation += 1
+        generation = self._scan_generation
         if not silent:
             folders = get_discoverable_folders()
             self._status.showMessage(
@@ -380,8 +385,6 @@ class MainWindow(QMainWindow):
             self._scanner.requestInterruption()
             self._scanner.wait(2000)
 
-        self._scan_generation += 1
-        generation = self._scan_generation
         self._scanner = LibraryScanner(cache=self._config.library_cache, auto=True)
         self._scanner.progress.connect(self._on_scan_progress)
         self._scanner.finished_scan.connect(
@@ -395,6 +398,21 @@ class MainWindow(QMainWindow):
     def _on_scan_progress(self, current: int, total: int) -> None:
         self._scan_progress.setRange(0, total)
         self._scan_progress.setValue(current)
+
+    def _clear_library_view(self, message: str) -> None:
+        """Remove imediatamente a biblioteca anterior antes de trocar de pasta."""
+        self._player.stop()
+        self._model.set_tracks([])
+        self._player.set_tracks([])
+        self._track_delegate.set_playing_row(-1)
+        self._table.viewport().update()
+        self._now_title.setText("Nenhuma faixa")
+        self._now_artist.setText("Carregando a pasta selecionada…")
+        self._track_count_label.setText("Carregando…")
+        self._seek_slider.setRange(0, 0)
+        self._position_label.setText("0:00")
+        self._duration_label.setText("0:00")
+        self._status.showMessage(message)
 
     def _on_scan_done(
         self, tracks: list, cache: dict, folder: Path | None, generation: int
