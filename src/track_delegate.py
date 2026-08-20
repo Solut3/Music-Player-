@@ -29,32 +29,37 @@ class TrackItemDelegate(QStyledItemDelegate):
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
         c = get_palette(self._theme)
         rect = option.rect
-        is_selected = option.state & QStyle.StateFlag.State_Selected
+        table = self.parent()
+        is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        if isinstance(table, QTableView) and table.selectionModel():
+            is_selected = table.selectionModel().isRowSelected(index.row(), QModelIndex())
         is_playing = index.row() == self._playing_row
 
         paint_option = QStyleOptionViewItem(option)
         if is_selected:
-            # A seleção é desenhada uma única vez para a linha inteira. Assim ela não
-            # fica dividida em células nem recebe a cor padrão do sistema.
-            table = self.parent()
-            if isinstance(table, QTableView) and index.column() == 0:
-                last_column = index.model().columnCount() - 1
-                row_rect = table.visualRect(index.siblingAtColumn(last_column))
-                row_rect.setLeft(rect.left())
-                row_rect.adjust(4, 3, -4, -3)
-
-                painter.save()
-                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.setPen(QColor(c["selection_border"]))
-                painter.drawRoundedRect(row_rect, 8, 8)
-                painter.restore()
-
             paint_option.state &= ~QStyle.StateFlag.State_Selected
             paint_option.palette.setColor(
                 QPalette.ColorRole.Text, QColor(c["selection_text"])
             )
         super().paint(painter, paint_option, index)
+
+        # Desenha depois do conteúdo da última coluna: assim o contorno não é
+        # interrompido pelos widgets de cada célula.
+        if (
+            is_selected
+            and isinstance(table, QTableView)
+            and index.column() == index.model().columnCount() - 1
+        ):
+            row_rect = table.visualRect(index.siblingAtColumn(0))
+            row_rect.setRight(rect.right())
+            row_rect.adjust(4, 3, -4, -3)
+
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QColor(c["selection_border"]))
+            painter.drawRoundedRect(row_rect, 8, 8)
+            painter.restore()
 
         if is_playing:
             painter.save()

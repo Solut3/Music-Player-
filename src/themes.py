@@ -183,7 +183,7 @@ def _build_stylesheet(theme: str) -> str:
         border: 1px solid {c["border"]};
         border-radius: 14px;
         gridline-color: transparent;
-        selection-background-color: {c["selection"]};
+        selection-background-color: transparent;
         selection-color: {c["selection_text"]};
         outline: none;
     }}
@@ -204,14 +204,19 @@ def _build_stylesheet(theme: str) -> str:
     }}
 
     QTableView::item:selected {{
-        background-color: {c["selection"]};
+        background-color: transparent;
         color: {c["selection_text"]};
-        border-left: 3px solid {c["accent"]};
+        border-left: 3px solid transparent;
     }}
 
     QTableView::item:selected:active {{
-        background-color: {c["selection"]};
+        background-color: transparent;
         color: {c["selection_text"]};
+    }}
+
+    QTableView::item:focus {{
+        background-color: transparent;
+        outline: none;
     }}
 
     QHeaderView::section {{
